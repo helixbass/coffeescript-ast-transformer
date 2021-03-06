@@ -1,0 +1,23 @@
+{
+  "name": "coffeescript-ast-transformer",
+  "version": "0.0.1-dev.1",
+  "main": "lib/index.js",
+  "repository": "https://github.com/helixbass/coffeescript-ast-transformer",
+  "author": "Julian Rosse <@helixbass> <julian@helixbass.net> (http://helixbass.net/)",
+  "license": "MIT",
+  "devDependencies": {
+    "coffeescript": "^2.5.1",
+    "eslint": "^7.21.0",
+    "eslint-config-prettier": "^8.1.0",
+    "eslint-plugin-coffee": "^0.1.14"
+  },
+  "dependencies": {
+    "@babel/core": "^7.13.8",
+    "@babel/generator": "^7.13.9",
+    "lodash": "^4.17.21"
+  },
+  "scripts": {
+    "watch": "coffee -o lib/ -wc src/",
+    "lint": "eslint 'src/**/*.coffee'"
+  }
+}
