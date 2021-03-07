@@ -1,0 +1,2 @@
+- doesn't look like special case in Op::generateDo() of Assign eg `do (a = (x, y = 1) ->)` is working? Is it tested?
+- test coverage of complex patterns for do variables eg `do ({x}) ->`?
