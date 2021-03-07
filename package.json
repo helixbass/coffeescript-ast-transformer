@@ -9,11 +9,12 @@
     "coffeescript": "^2.5.1",
     "eslint": "^7.21.0",
     "eslint-config-prettier": "^8.1.0",
-    "eslint-plugin-coffee": "^0.1.14"
+    "eslint-plugin-coffee": "github:helixbass/eslint-plugin-coffee#eslint-plugin-coffee-v0.1.15-dev.5-gitpkg"
   },
   "dependencies": {
     "@babel/core": "^7.13.8",
     "@babel/generator": "^7.13.9",
+    "@babel/types": "^7.13.0",
     "lodash": "^4.17.21"
   },
   "scripts": {

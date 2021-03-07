@@ -2,8 +2,10 @@ babel = require '@babel/core'
 {default: generate} = require '@babel/generator'
 
 transformCoffeePlugin = require './transform-plugin'
+overrideBabelTypes = require './override-babel-types'
 
 getTransformedAst = (astCoffee, {print} = {}) ->
+  overrideBabelTypes()
   {ast: astTransformed} = babel.transformFromAstSync astCoffee, null,
     code: no
     ast: yes

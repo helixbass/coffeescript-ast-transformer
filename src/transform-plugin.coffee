@@ -14,7 +14,7 @@ withNullReturnValues = mapValues (f) ->
       null
 
 class Scope
-  constructor: ->
+  constructor: (@parent) ->
     @declaredVariables = []
 
   addDeclaredVariable: (name) ->
@@ -22,6 +22,35 @@ class Scope
 
   hasDeclaredVariables: ->
     !!@declaredVariables.length
+
+  freeVariable: (name, {single, reserve = yes} = {}) ->
+    index = 0
+    loop
+      temp = Scope.getTemporary name, index, single
+      break unless @check(temp) # or temp in @root.referencedVars
+      index++
+    @addDeclaredVariable temp if reserve
+    temp
+
+  @getTemporary: (name, index, single = no) ->
+    if single
+      startCode = name.charCodeAt 0
+      endCode = 'z'.charCodeAt 0
+      diff = endCode - startCode
+      newCode = startCode + index % (diff + 1)
+      letter = String.fromCharCode newCode
+      num = index // (diff + 1)
+      "#{letter}#{num or ''}"
+    else
+      "#{name}#{index or ''}"
+
+  check: (name) ->
+    !! @type name
+
+  type: (name) ->
+    for declaredVariable in @declaredVariables when declaredVariable.name is name
+      return 'var'
+    null
 
 transformer = ({types: t}) ->
   addVariableDeclarations = (path, scope) ->
@@ -45,6 +74,10 @@ transformer = ({types: t}) ->
       when 'ReturnStatement'
       else
         replacePath.replaceWith t.returnStatement node
+
+  blockWrap = (nodes) ->
+    return nodes[0] if nodes.length is 1 and t.isBlockStatement nodes[0]
+    t.blockStatement nodes
 
   visitor: withNullReturnValues(
     Program:
@@ -85,6 +118,46 @@ transformer = ({types: t}) ->
         )
     'FunctionExpression|ArrowFunctionExpression': (path) ->
       makeReturn path.get 'body'
+    For: (path, {scope}) ->
+      {node: {body: bodyOriginal, source, name}} = path
+
+      body = blockWrap [bodyOriginal]
+
+      indexVariableName = scope.freeVariable 'i', single: yes
+      indexVariableIdentifier = t.identifier indexVariableName
+      indexInitialization = t.assignmentExpression(
+        '='
+        indexVariableIdentifier
+        t.numericLiteral 0
+      )
+      lengthVariableName = scope.freeVariable 'len'
+      lengthVariableIdentifier = t.identifier lengthVariableName
+      lengthInitialization = t.assignmentExpression(
+        '='
+        lengthVariableIdentifier
+        t.memberExpression source, t.identifier 'length'
+      )
+      init = t.sequenceExpression [
+        indexInitialization
+        lengthInitialization
+      ]
+      test = t.binaryExpression '<', indexVariableIdentifier, lengthVariableIdentifier
+      update = t.updateExpression '++', indexVariableIdentifier, no
+      body.body.unshift(
+        t.expressionStatement(
+          t.assignmentExpression(
+            '='
+            name
+            t.memberExpression source, indexVariableIdentifier, yes
+          )
+        )
+      )
+      path.replaceWith t.forStatement(
+        init
+        test
+        update
+        body
+      )
   )
 
 module.exports = transformer

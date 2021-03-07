@@ -9,7 +9,7 @@ const {isPlainObject, isArray} = require('lodash')
 
 const {getTransformedAst} = require('./lib')
 
-const [,, command] = process.argv
+const [,, inputFilename, command] = process.argv
 
 const stripLocationDataAndTokens = (obj) =>
   isArray(obj)
@@ -23,7 +23,7 @@ const stripLocationDataAndTokens = (obj) =>
 
 const dump = (obj) => console.log(util.inspect(obj, false, null))
 
-const inputSource = fs.readFileSync('./tmp.coffee', 'utf-8')
+const inputSource = fs.readFileSync(inputFilename, 'utf-8')
 const inputAst = coffeescript.compile(inputSource, {ast: true})
 if (command === 'coffee-ast') {
   dump(stripLocationDataAndTokens(inputAst))

@@ -41,6 +41,7 @@ rules:
   coffee/no-underscore-dangle: off
   coffee/valid-jsdoc: off
   coffee/spaced-comment: off
+  no-plusplus: off
 env:
   node: true
   es6: true
