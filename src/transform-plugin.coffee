@@ -32,6 +32,20 @@ transformer = ({types: t}) ->
   isFunction = (node) ->
     node.type in ['FunctionExpression', 'ArrowFunctionExpression']
 
+  makeReturn = (path, {replacePath = path} = {}) ->
+    {node} = path
+
+    switch node.type
+      when 'BlockStatement'
+        {body} = node
+        return unless body.length
+        makeReturn path.get "body.#{body.length - 1}"
+      when 'ExpressionStatement'
+        makeReturn path.get('expression'), replacePath: path
+      when 'ReturnStatement'
+      else
+        replacePath.replaceWith t.returnStatement node
+
   visitor: withNullReturnValues(
     Program:
       enter: (_, state) ->
@@ -69,6 +83,8 @@ transformer = ({types: t}) ->
               param
           ) ? []
         )
+    'FunctionExpression|ArrowFunctionExpression': (path) ->
+      makeReturn path.get 'body'
   )
 
 module.exports = transformer
