@@ -61,19 +61,30 @@ transformer = ({types: t}) ->
   isFunction = (node) ->
     node.type in ['FunctionExpression', 'ArrowFunctionExpression']
 
-  makeReturn = (path, {replacePath = path} = {}) ->
+  makeReturn = (path, {replacePath = path, resultsVariableName} = {}) ->
     {node} = path
 
     switch node.type
       when 'BlockStatement'
         {body} = node
         return unless body.length
-        makeReturn path.get "body.#{body.length - 1}"
+        makeReturn path.get("body.#{body.length - 1}"), {resultsVariableName}
       when 'ExpressionStatement'
-        makeReturn path.get('expression'), replacePath: path
+        makeReturn path.get('expression'), {replacePath: path, resultsVariableName}
       when 'ReturnStatement'
+        null
+      when 'For'
+        node.returns = yes
       else
-        replacePath.replaceWith t.returnStatement node
+        replacePath.replaceWith(
+          if resultsVariableName?
+            t.callExpression(
+              t.memberExpression(t.identifier(resultsVariableName), t.identifier('push')),
+              [node]
+            )
+          else
+            t.returnStatement node
+        )
 
   blockWrap = (nodes) ->
     return nodes[0] if nodes.length is 1 and t.isBlockStatement nodes[0]
@@ -119,9 +130,9 @@ transformer = ({types: t}) ->
     'FunctionExpression|ArrowFunctionExpression': (path) ->
       makeReturn path.get 'body'
     For: (path, {scope}) ->
-      {node: {body: bodyOriginal, source, name}} = path
+      {node: {body: bodyOriginal, source, name, returns}, node} = path
 
-      body = blockWrap [bodyOriginal]
+      node.body = body = blockWrap [bodyOriginal]
 
       indexVariableName = scope.freeVariable 'i', single: yes
       indexVariableIdentifier = t.identifier indexVariableName
@@ -152,12 +163,30 @@ transformer = ({types: t}) ->
           )
         )
       )
-      path.replaceWith t.forStatement(
+
+      if returns
+        returnsVariableName = scope.freeVariable 'results'
+        returnsVariableIdentifier = t.identifier returnsVariableName
+        makeReturn path.get('body'), resultsVariableName: returnsVariableName
+
+      forStatement = t.forStatement(
         init
         test
         update
         body
       )
+      if returns
+        path.replaceWithMultiple [
+          t.expressionStatement t.assignmentExpression(
+            '='
+            returnsVariableIdentifier
+            t.arrayExpression []
+          )
+          forStatement
+          t.returnStatement returnsVariableIdentifier
+        ]
+      else
+        path.replaceWith forStatement
   )
 
 module.exports = transformer
