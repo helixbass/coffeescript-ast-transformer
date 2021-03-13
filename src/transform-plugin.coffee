@@ -214,7 +214,20 @@ transformer = ({types: t}) ->
 
     forStatement =
       if style is 'from'
-        t.forOfStatement name, sourceReference, body
+        nameReference = name
+        unless t.isIdentifier name
+          nameReference = t.identifier scope.freeVariable 'x', single: yes
+          body.body.unshift(
+            t.expressionStatement(
+              t.assignmentExpression(
+                '='
+                name
+                nameReference
+              )
+            )
+          )
+
+        t.forOfStatement nameReference, sourceReference, body
       else
         indexVariableName = scope.freeVariable 'i', single: yes
         indexVariableIdentifier = t.identifier indexVariableName
