@@ -332,6 +332,15 @@ transformer = ({types: t}) ->
 
       if left.type is 'ArrayPattern' and not getIsAssignable(left)
         handleDestructuringAssignment(path, scope)
+
+    InterpolatedRegExpLiteral: (path) ->
+      {node: {interpolatedPattern}} = path
+
+      regExpCall = t.callExpression(
+        t.identifier 'RegExp'
+        [interpolatedPattern]
+      )
+      path.replaceWith regExpCall
   )
 
 module.exports = transformer

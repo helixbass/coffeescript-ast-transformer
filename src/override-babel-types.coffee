@@ -1,5 +1,5 @@
 override = ->
-  {FLIPPED_ALIAS_KEYS} = require '@babel/types'
+  {FLIPPED_ALIAS_KEYS, TYPES} = require '@babel/types'
   {
     default: defineType
     # assertNodeType
@@ -70,6 +70,11 @@ override = ->
   defineType 'For',
     visitor: ['name', 'index', 'guard', 'step', 'body']
     aliases: ['Statement']
+
+  defineType 'InterpolatedRegExpLiteral',
+    visitor: ['interpolatedPattern']
+    aliases: ['Expression']
+  TYPES.push 'InterpolatedRegExpLiteral'
 
   delete FLIPPED_ALIAS_KEYS.For
 
