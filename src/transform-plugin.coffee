@@ -142,7 +142,8 @@ transformer = ({types: t}) ->
     generateSplice = slicer 'splice'
 
     splatOrExpansionIndex = elements.findIndex (element) -> element?.type is 'RestElement'
-    isSplat = elements[splatOrExpansionIndex].argument?
+    splatOrExpansionElement = elements[splatOrExpansionIndex]
+    isSplat = splatOrExpansionElement.argument?
     leftElements = elements.slice 0, splatOrExpansionIndex + (if isSplat then 1 else 0)
     rightElements = elements.slice splatOrExpansionIndex + 1
     rhsReference = right
@@ -154,7 +155,7 @@ transformer = ({types: t}) ->
     if rightElements.length
       rightElementsAssignmentRhs =
         if isSplat
-          generateSplice( )
+          generateSplice splatOrExpansionElement.argument, rightElements.length * -1
         else
           generateSlice rhsReference, rightElements.length * -1
       pushAssignment t.arrayPattern(rightElements), rightElementsAssignmentRhs
@@ -205,51 +206,56 @@ transformer = ({types: t}) ->
     'FunctionExpression|ArrowFunctionExpression': (path) ->
       makeReturn path.get 'body'
     For: (path, {scope}) ->
-      {node: {body: bodyOriginal, source, name, returns}, node} = path
+      {node: {body: bodyOriginal, source, name, returns, style}, node} = path
 
       node.body = body = blockWrap [bodyOriginal]
-
-      indexVariableName = scope.freeVariable 'i', single: yes
-      indexVariableIdentifier = t.identifier indexVariableName
-      indexInitialization = t.assignmentExpression(
-        '='
-        indexVariableIdentifier
-        t.numericLiteral 0
-      )
-      lengthVariableName = scope.freeVariable 'len'
-      lengthVariableIdentifier = t.identifier lengthVariableName
-      lengthInitialization = t.assignmentExpression(
-        '='
-        lengthVariableIdentifier
-        t.memberExpression source, t.identifier 'length'
-      )
-      init = t.sequenceExpression [
-        indexInitialization
-        lengthInitialization
-      ]
-      test = t.binaryExpression '<', indexVariableIdentifier, lengthVariableIdentifier
-      update = t.updateExpression '++', indexVariableIdentifier, no
-      body.body.unshift(
-        t.expressionStatement(
-          t.assignmentExpression(
-            '='
-            name
-            t.memberExpression source, indexVariableIdentifier, yes
-          )
-        )
-      )
 
       if returns
         returnsVariableName = scope.freeVariable 'results'
         returnsVariableIdentifier = t.identifier returnsVariableName
         makeReturn path.get('body'), resultsVariableName: returnsVariableName
 
-      forStatement = t.forStatement(
-        init
-        test
-        update
-        body
-      )
+      forStatement =
+        if style is 'from'
+          t.forOfStatement name, source, body
+        else
+          indexVariableName = scope.freeVariable 'i', single: yes
+          indexVariableIdentifier = t.identifier indexVariableName
+          indexInitialization = t.assignmentExpression(
+            '='
+            indexVariableIdentifier
+            t.numericLiteral 0
+          )
+          lengthVariableName = scope.freeVariable 'len'
+          lengthVariableIdentifier = t.identifier lengthVariableName
+          lengthInitialization = t.assignmentExpression(
+            '='
+            lengthVariableIdentifier
+            t.memberExpression source, t.identifier 'length'
+          )
+          init = t.sequenceExpression [
+            indexInitialization
+            lengthInitialization
+          ]
+          test = t.binaryExpression '<', indexVariableIdentifier, lengthVariableIdentifier
+          update = t.updateExpression '++', indexVariableIdentifier, no
+          body.body.unshift(
+            t.expressionStatement(
+              t.assignmentExpression(
+                '='
+                name
+                t.memberExpression source, indexVariableIdentifier, yes
+              )
+            )
+          )
+
+          t.forStatement(
+            init
+            test
+            update
+            body
+          )
+
       if returns
         path.replaceWithMultiple [
           t.expressionStatement t.assignmentExpression(
