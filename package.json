@@ -15,11 +15,15 @@
     "@babel/core": "^7.13.8",
     "@babel/generator": "^7.13.9",
     "@babel/template": "^7.12.13",
+    "@babel/traverse": "github:helixbass/babel#babel-traverse-v7.13.1-dev.2-gitpkg",
     "@babel/types": "^7.13.0",
     "lodash": "^4.17.21"
   },
   "scripts": {
     "watch": "coffee -o lib/ -wc src/",
     "lint": "eslint 'src/**/*.coffee'"
+  },
+  "resolutions": {
+    "@babel/traverse": "github:helixbass/babel#babel-traverse-v7.13.1-dev.2-gitpkg"
   }
 }

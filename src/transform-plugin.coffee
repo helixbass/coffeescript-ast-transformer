@@ -164,6 +164,93 @@ transformer = ({types: t}) ->
       nodesToSkip.add expressionStatement
       expressionStatement
 
+  wrapInClosure = (path) ->
+    {node} = path
+    func = t.functionExpression null, [], blockWrap [node]
+    iife = t.callExpression func, []
+    path.replaceWith iife
+
+  visitFor = (path, {scope}) ->
+    {node: {body: bodyOriginal, source, name, returns, style}, node} = path
+
+    node.body = body = blockWrap [bodyOriginal]
+
+    if returns
+      returnsVariableName = scope.freeVariable 'results'
+      returnsVariableIdentifier = t.identifier returnsVariableName
+      makeReturn path.get('body'), resultsVariableName: returnsVariableName
+
+    definitions = []
+    sourceReference = source
+    if name and not t.isIdentifier source
+      sourceReferenceName = scope.freeVariable 'ref'
+      sourceReference = t.identifier sourceReferenceName
+      definitions.push t.assignmentExpression(
+        '='
+        sourceReference
+        source
+      )
+
+    forStatement =
+      if style is 'from'
+        t.forOfStatement name, sourceReference, body
+      else
+        indexVariableName = scope.freeVariable 'i', single: yes
+        indexVariableIdentifier = t.identifier indexVariableName
+        indexInitialization = t.assignmentExpression(
+          '='
+          indexVariableIdentifier
+          t.numericLiteral 0
+        )
+        lengthVariableName = scope.freeVariable 'len'
+        lengthVariableIdentifier = t.identifier lengthVariableName
+        lengthInitialization = t.assignmentExpression(
+          '='
+          lengthVariableIdentifier
+          t.memberExpression sourceReference, t.identifier 'length'
+        )
+        init = t.sequenceExpression [
+          indexInitialization
+          lengthInitialization
+        ]
+        test = t.binaryExpression '<', indexVariableIdentifier, lengthVariableIdentifier
+        update = t.updateExpression '++', indexVariableIdentifier, no
+        body.body.unshift(
+          t.expressionStatement(
+            t.assignmentExpression(
+              '='
+              name
+              t.memberExpression sourceReference, indexVariableIdentifier, yes
+            )
+          )
+        )
+
+        t.forStatement(
+          init
+          test
+          update
+          body
+        )
+
+    statements = [
+      ...definitions.map (definition) ->
+        t.expressionStatement definition
+      forStatement
+    ]
+
+    if returns
+      path.replaceWithMultiple [
+        t.expressionStatement t.assignmentExpression(
+          '='
+          returnsVariableIdentifier
+          t.arrayExpression []
+        )
+        ...statements
+        t.returnStatement returnsVariableIdentifier
+      ]
+    else
+      path.replaceWithMultiple statements
+  
   visitor: withNullReturnValues(
     Program:
       enter: (_, state) ->
@@ -205,69 +292,13 @@ transformer = ({types: t}) ->
         )
     'FunctionExpression|ArrowFunctionExpression': (path) ->
       makeReturn path.get 'body'
-    For: (path, {scope}) ->
-      {node: {body: bodyOriginal, source, name, returns, style}, node} = path
+    'Statement|For': (path, state) ->
+      unless path.node.type in ['Program', 'BlockStatement'] or path.parentPath.node.type in ['Program', 'BlockStatement']
+        wrapInClosure path
+        state.sharedScope = yes
+        return
 
-      node.body = body = blockWrap [bodyOriginal]
-
-      if returns
-        returnsVariableName = scope.freeVariable 'results'
-        returnsVariableIdentifier = t.identifier returnsVariableName
-        makeReturn path.get('body'), resultsVariableName: returnsVariableName
-
-      forStatement =
-        if style is 'from'
-          t.forOfStatement name, source, body
-        else
-          indexVariableName = scope.freeVariable 'i', single: yes
-          indexVariableIdentifier = t.identifier indexVariableName
-          indexInitialization = t.assignmentExpression(
-            '='
-            indexVariableIdentifier
-            t.numericLiteral 0
-          )
-          lengthVariableName = scope.freeVariable 'len'
-          lengthVariableIdentifier = t.identifier lengthVariableName
-          lengthInitialization = t.assignmentExpression(
-            '='
-            lengthVariableIdentifier
-            t.memberExpression source, t.identifier 'length'
-          )
-          init = t.sequenceExpression [
-            indexInitialization
-            lengthInitialization
-          ]
-          test = t.binaryExpression '<', indexVariableIdentifier, lengthVariableIdentifier
-          update = t.updateExpression '++', indexVariableIdentifier, no
-          body.body.unshift(
-            t.expressionStatement(
-              t.assignmentExpression(
-                '='
-                name
-                t.memberExpression source, indexVariableIdentifier, yes
-              )
-            )
-          )
-
-          t.forStatement(
-            init
-            test
-            update
-            body
-          )
-
-      if returns
-        path.replaceWithMultiple [
-          t.expressionStatement t.assignmentExpression(
-            '='
-            returnsVariableIdentifier
-            t.arrayExpression []
-          )
-          forStatement
-          t.returnStatement returnsVariableIdentifier
-        ]
-      else
-        path.replaceWith forStatement
+      visitFor(path, state) if path.node.type is 'For'
 
     ExpressionStatement: (path) ->
       {node} = path
