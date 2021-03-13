@@ -114,6 +114,7 @@ transformer = ({types: t}) ->
     switch node.type
       when 'ArrayPattern'
         {elements} = node
+        return no unless elements.length
         for element, index in elements
           continue unless element?
           return no if element.type is 'RestElement' and index < elements.length - 1
@@ -140,6 +141,10 @@ transformer = ({types: t}) ->
 
   handleDestructuringAssignment = (path, scope) ->
     {node: {left: {elements}, right}} = path
+
+    unless elements.length
+      path.replaceWith right
+      return
 
     slicer = (type) -> (object, startIndex) ->
       args = [object, t.numericLiteral(startIndex)]
@@ -374,7 +379,7 @@ transformer = ({types: t}) ->
       {node: {left}} = path
 
       if left.type is 'ArrayPattern' and not getIsAssignable(left)
-        handleDestructuringAssignment(path, scope)
+        handleDestructuringAssignment path, scope
 
     InterpolatedRegExpLiteral: (path) ->
       {node: {interpolatedPattern}} = path
