@@ -128,6 +128,8 @@ transformer = ({types: t}) ->
       template.expression.ast '[].slice'
     splice: ->
       template.expression.ast '[].splice'
+    modulo: ->
+      template.expression.ast 'function(a, b) { return (+a % (b = +b) + b) % b; }'
   utility = (name, scope) ->
     {root} = scope
     if name of root.utilities
@@ -306,7 +308,7 @@ transformer = ({types: t}) ->
     Identifier: (path, {scope}) ->
       {node: {declaration, name}} = path
       scope.addDeclaredVariable name if declaration
-    'BinaryExpression|LogicalExpression': (path) ->
+    'BinaryExpression|LogicalExpression': (path, {scope}) ->
       {node: {operator, left, right}, node} = path
 
       CONVERSIONS =
@@ -317,18 +319,24 @@ transformer = ({types: t}) ->
       if operator of CONVERSIONS
         node.operator = CONVERSIONS[operator]
 
-      if operator is '?'
-        test = t.unaryExpression '?', left, no
-        consequent = left
-        alternate = right
-        if t.isExpressionStatement path.parentPath
-          path.parentPath.replaceWith t.ifStatement(
-            test
-            t.blockStatement [t.expressionStatement consequent]
-            t.blockStatement [t.expressionStatement alternate]
+      switch operator
+        when '?'
+          test = t.unaryExpression '?', left, no
+          consequent = left
+          alternate = right
+          if t.isExpressionStatement path.parentPath
+            path.parentPath.replaceWith t.ifStatement(
+              test
+              t.blockStatement [t.expressionStatement consequent]
+              t.blockStatement [t.expressionStatement alternate]
+            )
+          else
+            path.replaceWith t.conditionalExpression test, consequent, alternate
+        when '%%'
+          path.replaceWith t.callExpression(
+            t.identifier utility 'modulo', scope
+            [left, right]
           )
-        else
-          path.replaceWith t.conditionalExpression test, consequent, alternate
 
     UnaryExpression: (path, {scope}) ->
       {node: {operator, argument}} = path
