@@ -155,10 +155,17 @@ transformer = ({types: t}) ->
     isSplat = splatOrExpansionElement.argument?
     leftElements = elements.slice 0, splatOrExpansionIndex + (if isSplat then 1 else 0)
     rightElements = elements.slice splatOrExpansionIndex + 1
-    rhsReference = right
     assignments = []
     pushAssignment = (lhs, rhs) ->
       assignments.push t.assignmentExpression '=', lhs, rhs
+    rhsReference =
+      if t.isIdentifier right
+        right
+      else
+        rhsReferenceName = scope.freeVariable 'ref'
+        rhsReferenceIdentifier = t.identifier rhsReferenceName
+        pushAssignment rhsReferenceIdentifier, right
+        rhsReferenceIdentifier
     if leftElements.length
       pushAssignment t.arrayPattern(leftElements), rhsReference
     if rightElements.length
