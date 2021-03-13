@@ -269,10 +269,11 @@ transformer = ({types: t}) ->
         state.scope = new Scope
       exit: (path, {scope}) ->
         addVariableDeclarations(path, scope) if scope.hasDeclaredVariables()
-    Identifier: ({node: {declaration, name}}, {scope}) ->
+    Identifier: (path, {scope}) ->
+      {node: {declaration, name}} = path
       scope.addDeclaredVariable name if declaration
     'BinaryExpression|LogicalExpression': (path) ->
-      {node: {operator}, node} = path
+      {node: {operator, left, right}, node} = path
 
       CONVERSIONS =
         is: '==='
@@ -281,6 +282,19 @@ transformer = ({types: t}) ->
 
       if operator of CONVERSIONS
         node.operator = CONVERSIONS[operator]
+
+      if operator is '?'
+        test = t.unaryExpression '?', left, no
+        consequent = left
+        alternate = right
+        if t.isExpressionStatement path.parentPath
+          path.parentPath.replaceWith t.ifStatement(
+            test
+            t.blockStatement [t.expressionStatement consequent]
+            t.blockStatement [t.expressionStatement alternate]
+          )
+        else
+          path.replaceWith t.conditionalExpression test, consequent, alternate
 
     UnaryExpression: (path, {scope}) ->
       {node: {operator, argument}} = path

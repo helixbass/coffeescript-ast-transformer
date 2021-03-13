@@ -2,7 +2,7 @@ override = ->
   {FLIPPED_ALIAS_KEYS, TYPES} = require '@babel/types'
   {
     default: defineType
-    # assertNodeType
+    assertNodeType
     # assertValueType
     # chain
     # assertEach
@@ -46,16 +46,16 @@ override = ->
   #       optional: yes
   #     exportKind: validateOptional assertOneOf 'type', 'value'
 
-  # defineType 'UnaryExpression',
-  #   visitor: ['argument']
-  #   builder: ['operator', 'argument', 'prefix']
-  #   fields:
-  #     prefix:
-  #       default: yes
-  #     argument:
-  #       validate: assertNodeType 'Expression'
-  #     operator: {}
-  #     # validate: assertOneOf [...UNARY_OPERATORS, '?']
+  defineType 'UnaryExpression',
+    visitor: ['argument']
+    builder: ['operator', 'argument', 'prefix']
+    fields:
+      prefix:
+        default: yes
+      argument:
+        validate: assertNodeType 'Expression'
+      operator: {}
+      # validate: assertOneOf [...UNARY_OPERATORS, '?']
 
   # defineType 'LogicalExpression',
   #   builder: ['operator', 'left', 'right']
