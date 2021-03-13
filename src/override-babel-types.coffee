@@ -76,6 +76,11 @@ override = ->
     aliases: ['Expression']
   TYPES.push 'InterpolatedRegExpLiteral'
 
+  defineType 'Range',
+    visitor: ['from', 'to']
+    aliases: ['Expression']
+  TYPES.push 'Range'
+
   delete FLIPPED_ALIAS_KEYS.For
 
 module.exports = override

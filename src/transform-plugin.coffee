@@ -410,6 +410,15 @@ transformer = ({types: t}) ->
       {node} = path
 
       node.alternate ?= template.expression.ast 'void 0'
+
+    Range: (path) ->
+      {node: {from, to, exclusive}} = path
+
+      if t.isNumericLiteral(from) and t.isNumericLiteral(to) and Math.abs(from.value - to.value) <= 20
+        range = [from.value..to.value]
+        range.pop() if exclusive
+        path.replaceWith t.arrayExpression range.map (number) ->
+          t.numericLiteral number
   )
 
 module.exports = transformer
