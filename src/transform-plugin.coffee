@@ -1,4 +1,5 @@
 {mapValues} = require 'lodash/fp'
+{default: template} = require '@babel/template'
 
 withNullReturnValues = mapValues (f) ->
   if f.enter or f.exit
@@ -16,9 +17,15 @@ withNullReturnValues = mapValues (f) ->
 class Scope
   constructor: (@parent) ->
     @declaredVariables = []
+    @positions = {}
+    @utilities = {} unless @parent
+    @root = @parent?.root ? @
 
-  addDeclaredVariable: (name) ->
-    @declaredVariables.push name
+  addDeclaredVariable: (name, type) ->
+    if Object::hasOwnProperty.call @positions, name
+      @declaredVariables[@positions[name]].type = type
+    else
+      @positions[name] = @declaredVariables.push({name, type}) - 1
 
   hasDeclaredVariables: ->
     !!@declaredVariables.length
@@ -52,11 +59,15 @@ class Scope
       return 'var'
     null
 
+  assign: (name, value) ->
+    @addDeclaredVariable name, {value, assigned: yes}
+    @hasAssignments = yes
+
 transformer = ({types: t}) ->
   addVariableDeclarations = (path, scope) ->
     path.unshiftContainer 'body',
-      t.variableDeclaration 'var', scope.declaredVariables.map (name) ->
-        t.variableDeclarator t.identifier name
+      t.variableDeclaration 'var', scope.declaredVariables.map ({name, type}) ->
+        t.variableDeclarator t.identifier(name), if type?.assigned then type.value
 
   isFunction = (node) ->
     node.type in ['FunctionExpression', 'ArrowFunctionExpression']
@@ -90,6 +101,67 @@ transformer = ({types: t}) ->
     return nodes[0] if nodes.length is 1 and t.isBlockStatement nodes[0]
     t.blockStatement nodes
 
+  getIsAssignable = (node) ->
+    switch node.type
+      when 'ArrayPattern'
+        {elements} = node
+        for element, index in elements
+          return no if element.type is 'RestElement' and index < elements.length - 1
+          return no if element.type is 'RestElement' and not element.argument?
+        yes
+      else
+        yes
+
+  UTILITIES =
+    slice: ->
+      template.expression.ast '[].slice'
+    splice: ->
+      template.expression.ast '[].splice'
+  utility = (name, scope) ->
+    {root} = scope
+    if name of root.utilities
+      root.utilities[name]
+    else
+      ref = root.freeVariable name
+      root.assign ref, UTILITIES[name]()
+      root.utilities[name] = ref
+
+  nodesToSkip = new WeakSet()
+
+  handleDestructuringAssignment = (path, scope) ->
+    {node: {left: {elements}, right}} = path
+
+    slicer = (type) -> (object, startIndex) ->
+      args = [object, t.numericLiteral(startIndex)]
+      t.callExpression(
+        template.expression.ast "#{utility(type, scope)}.call"
+        args
+      )
+    generateSlice = slicer 'slice'
+    generateSplice = slicer 'splice'
+
+    splatOrExpansionIndex = elements.findIndex (element) -> element?.type is 'RestElement'
+    isSplat = elements[splatOrExpansionIndex].argument?
+    leftElements = elements.slice 0, splatOrExpansionIndex + (if isSplat then 1 else 0)
+    rightElements = elements.slice splatOrExpansionIndex + 1
+    rhsReference = right
+    assignments = []
+    pushAssignment = (lhs, rhs) ->
+      assignments.push t.assignmentExpression '=', lhs, rhs
+    if leftElements.length
+      pushAssignment t.arrayPattern(leftElements), rhsReference
+    if rightElements.length
+      rightElementsAssignmentRhs =
+        if isSplat
+          generateSplice( )
+        else
+          generateSlice rhsReference, rightElements.length * -1
+      pushAssignment t.arrayPattern(rightElements), rightElementsAssignmentRhs
+    path.parentPath.replaceWithMultiple assignments.map (assignment) ->
+      expressionStatement = t.expressionStatement assignment
+      nodesToSkip.add expressionStatement
+      expressionStatement
+
   visitor: withNullReturnValues(
     Program:
       enter: (_, state) ->
@@ -98,11 +170,13 @@ transformer = ({types: t}) ->
         addVariableDeclarations(path, scope) if scope.hasDeclaredVariables()
     Identifier: ({node: {declaration, name}}, {scope}) ->
       scope.addDeclaredVariable name if declaration
-    BinaryExpression: (path) ->
+    'BinaryExpression|LogicalExpression': (path) ->
       {node: {operator}, node} = path
 
       CONVERSIONS =
-        'is': '==='
+        is: '==='
+        and: '&&'
+        or: '||'
 
       if operator of CONVERSIONS
         node.operator = CONVERSIONS[operator]
@@ -187,6 +261,16 @@ transformer = ({types: t}) ->
         ]
       else
         path.replaceWith forStatement
+
+    ExpressionStatement: (path) ->
+      {node} = path
+      path.skip() if nodesToSkip.has node
+
+    AssignmentExpression: (path, {scope}) ->
+      {node: {left}} = path
+
+      if left.type is 'ArrayPattern' and not getIsAssignable(left)
+        handleDestructuringAssignment(path, scope)
   )
 
 module.exports = transformer
