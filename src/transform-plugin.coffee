@@ -21,7 +21,8 @@ class Scope
     @utilities = {} unless @parent
     @root = @parent?.root ? @
 
-  addDeclaredVariable: (name, type) ->
+  addDeclaredVariable: (name, type, immediate) ->
+    return @parent.addDeclaredVariable name, type if @shared and not immediate
     if Object::hasOwnProperty.call @positions, name
       @declaredVariables[@positions[name]].type = type
     else
@@ -36,7 +37,7 @@ class Scope
       temp = Scope.getTemporary name, index, single
       break unless @check(temp) # or temp in @root.referencedVars
       index++
-    @addDeclaredVariable temp if reserve
+    @addDeclaredVariable temp, 'var', yes if reserve
     temp
 
   @getTemporary: (name, index, single = no) ->
@@ -65,7 +66,15 @@ class Scope
 
 transformer = ({types: t}) ->
   addVariableDeclarations = (path, scope) ->
-    path.unshiftContainer 'body',
+    {node: {body}} = path
+
+    bodyContainerSubpath =
+      if Array.isArray body
+        path
+      else
+        path.get 'body'
+
+    bodyContainerSubpath.unshiftContainer 'body',
       t.variableDeclaration 'var', scope.declaredVariables.map ({name, type}) ->
         t.variableDeclarator t.identifier(name), if type?.assigned then type.value
 
@@ -170,6 +179,11 @@ transformer = ({types: t}) ->
     iife = t.callExpression func, []
     path.replaceWith iife
 
+  del = (object, key) ->
+    value = object[key]
+    delete object[key]
+    value
+
   visitFor = (path, {scope}) ->
     {node: {body: bodyOriginal, source, name, returns, style}, node} = path
 
@@ -185,7 +199,7 @@ transformer = ({types: t}) ->
     if name and not t.isIdentifier source
       sourceReferenceName = scope.freeVariable 'ref'
       sourceReference = t.identifier sourceReferenceName
-      definitions.push t.assignmentExpression(
+      definitions.push t.expressionStatement t.assignmentExpression(
         '='
         sourceReference
         source
@@ -232,24 +246,22 @@ transformer = ({types: t}) ->
           body
         )
 
-    statements = [
-      ...definitions.map (definition) ->
-        t.expressionStatement definition
-      forStatement
-    ]
-
     if returns
       path.replaceWithMultiple [
+        ...definitions
         t.expressionStatement t.assignmentExpression(
           '='
           returnsVariableIdentifier
           t.arrayExpression []
         )
-        ...statements
+        forStatement
         t.returnStatement returnsVariableIdentifier
       ]
     else
-      path.replaceWithMultiple statements
+      path.replaceWithMultiple [
+        ...definitions
+        forStatement
+      ]
   
   visitor: withNullReturnValues(
     Program:
@@ -290,8 +302,19 @@ transformer = ({types: t}) ->
               param
           ) ? []
         )
-    'FunctionExpression|ArrowFunctionExpression': (path) ->
-      makeReturn path.get 'body'
+    'FunctionExpression|ArrowFunctionExpression':
+      enter: (path, state) ->
+        {scope} = state
+        newScope = new Scope scope
+        newScope.shared = del state, 'sharedScope'
+        state.scope = newScope
+
+        makeReturn path.get 'body'
+      exit: (path, state) ->
+        {scope} = state
+        addVariableDeclarations(path, scope) if scope.hasDeclaredVariables()
+        state.scope = scope.parent
+
     'Statement|For': (path, state) ->
       unless path.node.type in ['Program', 'BlockStatement'] or path.parentPath.node.type in ['Program', 'BlockStatement']
         wrapInClosure path
