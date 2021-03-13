@@ -106,6 +106,7 @@ transformer = ({types: t}) ->
       when 'ArrayPattern'
         {elements} = node
         for element, index in elements
+          continue unless element?
           return no if element.type is 'RestElement' and index < elements.length - 1
           return no if element.type is 'RestElement' and not element.argument?
         yes
