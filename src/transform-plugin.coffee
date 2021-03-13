@@ -197,9 +197,18 @@ transformer = ({types: t}) ->
     value
 
   visitFor = (path, {scope}) ->
-    {node: {body: bodyOriginal, source, name, returns, style}, node} = path
+    {node: {body: bodyOriginal, source, name, returns, style, guard}, node} = path
 
     node.body = body = blockWrap [bodyOriginal]
+
+    if guard
+      if body.body.length > 1
+        body.body.unshift t.ifStatement(
+          t.unaryExpression '!', guard
+          t.blockStatement [t.continueStatement()]
+        )
+      else
+        body = blockWrap [t.ifStatement guard, body]
 
     if returns
       returnsVariableName = scope.freeVariable 'results'
