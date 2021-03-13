@@ -282,26 +282,35 @@ transformer = ({types: t}) ->
       if operator of CONVERSIONS
         node.operator = CONVERSIONS[operator]
 
-    UnaryExpression: (path) ->
+    UnaryExpression: (path, {scope}) ->
       {node: {operator, argument}} = path
 
-      if operator is 'do'
-        func =
-          if t.isAssignmentExpression(argument) and isFunction(argument.right)
-            argument.right
-          else
-            argument
-
-        path.replaceWith t.callExpression(
-          argument,
-          func.params?.map((param, paramIndex) ->
-            if t.isAssignmentPattern param
-              func.params[paramIndex] = param.left
-              param.right
+      switch operator
+        when '?'
+          path.replaceWith(
+            if t.isIdentifier(argument) and not scope.check argument.name
+              template.expression.ast "typeof #{argument.name} !== 'undefined' && #{argument.name} !== null"
             else
-              param
-          ) ? []
-        )
+              template.expression.ast "#{argument.name} != null"
+          )
+        when 'do'
+          func =
+            if t.isAssignmentExpression(argument) and isFunction(argument.right)
+              argument.right
+            else
+              argument
+
+          path.replaceWith t.callExpression(
+            argument,
+            func.params?.map((param, paramIndex) ->
+              if t.isAssignmentPattern param
+                func.params[paramIndex] = param.left
+                param.right
+              else
+                param
+            ) ? []
+          )
+
     'FunctionExpression|ArrowFunctionExpression':
       enter: (path, state) ->
         {scope} = state
