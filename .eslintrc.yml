@@ -42,6 +42,7 @@ rules:
   coffee/valid-jsdoc: off
   coffee/spaced-comment: off
   no-plusplus: off
+  no-empty: [error, allowEmptyCatch: true]
 env:
   node: true
   es6: true

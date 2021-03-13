@@ -81,6 +81,11 @@ override = ->
     aliases: ['Expression']
   TYPES.push 'Range'
 
+  defineType 'PassthroughLiteral',
+    visitor: []
+    aliases: ['Expression']
+  TYPES.push 'PassthroughLiteral'
+
   delete FLIPPED_ALIAS_KEYS.For
 
 module.exports = override

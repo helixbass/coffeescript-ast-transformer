@@ -1,5 +1,6 @@
 {mapValues} = require 'lodash/fp'
 {default: template} = require '@babel/template'
+babelParser = require '@babel/parser'
 
 withNullReturnValues = mapValues (f) ->
   if f.enter or f.exit
@@ -197,6 +198,20 @@ transformer = ({types: t}) ->
     value = object[key]
     delete object[key]
     value
+
+  HEREDOC_INDENT = /\n+([^\n\S]*)(?=\S)/g
+  LEADING_BLANK_LINE = /^[^\n\S]*\n/
+  TRAILING_BLANK_LINE = /\n[^\n\S]*$/
+
+  getProcessedHeredoc = (string) ->
+    indent = null
+    while match = HEREDOC_INDENT.exec string
+      attempt = match[1]
+      indent = attempt if indent is null or 0 < attempt.length < indent.length
+    string = string.replace /// \n#{indent} ///g, '\n' if indent
+    string = string.replace LEADING_BLANK_LINE, ''
+    string = string.replace TRAILING_BLANK_LINE, ''
+    string
 
   visitFor = (path, {scope}) ->
     {node: {body: bodyOriginal, source, name, returns, style, guard}, node} = path
@@ -419,6 +434,31 @@ transformer = ({types: t}) ->
         range.pop() if exclusive
         path.replaceWith t.arrayExpression range.map (number) ->
           t.numericLiteral number
+
+    PassthroughLiteral: (path) ->
+      {node: {value}} = path
+
+      parsedAst = do ->
+        try
+          parsed = babelParser.parse(value, sourceType: 'module').program.body
+          if parsed?.length
+            return parsed[0].expression if parsed.length is 1 and t.isExpressionStatement parsed[0]
+            return parsed
+        catch
+        try
+          return babelParser.parseExpression value
+        catch
+        babelParser.parse("class A {#{value}}", sourceType: 'module').program.body[0].body.body[0]
+
+      path.replaceWithMultiple(if parsedAst.length then parsedAst else [parsedAst])
+
+    TemplateLiteral: (path) ->
+      {node: {quote, quasis}} = path
+
+      if quote.length is 3
+        loneTemplateElement = quasis[0]
+        string = loneTemplateElement.value.raw
+        loneTemplateElement.value.raw = getProcessedHeredoc string
   )
 
 module.exports = transformer
