@@ -364,6 +364,10 @@ transformer = ({types: t}) ->
         [interpolatedPattern]
       )
       path.replaceWith regExpCall
+    ConditionalExpression: (path) ->
+      {node} = path
+
+      node.alternate ?= template.expression.ast 'void 0'
   )
 
 module.exports = transformer
