@@ -453,12 +453,17 @@ transformer = ({types: t}) ->
       path.replaceWithMultiple(if parsedAst.length then parsedAst else [parsedAst])
 
     TemplateLiteral: (path) ->
-      {node: {quote, quasis}} = path
+      {node: {quote, quasis, expressions}} = path
 
       if quote.length is 3
         loneTemplateElement = quasis[0]
         string = loneTemplateElement.value.raw
         loneTemplateElement.value.raw = getProcessedHeredoc string
+
+      while (emptyInterpolationIndex = expressions.findIndex ({type}) -> type is 'EmptyInterpolation') isnt -1
+        expressions.splice emptyInterpolationIndex, 1
+        quasis[emptyInterpolationIndex].value.raw = "#{quasis[emptyInterpolationIndex].value.raw}#{quasis[emptyInterpolationIndex + 1].value.raw}"
+        quasis.splice emptyInterpolationIndex + 1, 1
   )
 
 module.exports = transformer
