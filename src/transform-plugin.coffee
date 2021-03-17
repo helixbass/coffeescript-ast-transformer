@@ -202,16 +202,32 @@ transformer = ({types: t}) ->
   HEREDOC_INDENT = /\n+([^\n\S]*)(?=\S)/g
   LEADING_BLANK_LINE = /^[^\n\S]*\n/
   TRAILING_BLANK_LINE = /\n[^\n\S]*$/
+  TRAILING_NULL_ESCAPE = /// \\0 $ ///
+  STRING_OMIT = ///
+      ((?:\\\\)+)
+    | \\[^\S\n]*\n\s*
+  ///g
+  SIMPLE_STRING_OMIT = /\s*\n\s*/g
 
-  getProcessedHeredoc = (string) ->
-    indent = null
-    while match = HEREDOC_INDENT.exec string
-      attempt = match[1]
-      indent = attempt if indent is null or 0 < attempt.length < indent.length
-    string = string.replace /// \n#{indent} ///g, '\n' if indent
-    string = string.replace LEADING_BLANK_LINE, ''
-    string = string.replace TRAILING_BLANK_LINE, ''
-    string
+  processTemplateElements = (templateElements, {isHeredoc = no} = {}) ->
+    strings = templateElements.map ({value: {raw}}) -> raw
+
+    if isHeredoc
+      indent = null
+      while match = HEREDOC_INDENT.exec strings.join '#{}'
+        attempt = match[1]
+        indent = attempt if indent is null or 0 < attempt.length < indent.length
+
+    processed =
+      for string, index in strings
+        string = string.replace STRING_OMIT, '$1'
+        if isHeredoc
+          string = string.replace /// \n#{indent} ///g, '\n' if indent
+          string = string.replace LEADING_BLANK_LINE, '' if index is 0
+          string = string.replace TRAILING_BLANK_LINE, '' if index is strings.length - 1
+        string = string.replace TRAILING_NULL_ESCAPE, '\\x00'
+        string
+    (templateElements[index].value.raw = processedString) for processedString, index in processed
 
   visitFor = (path, {scope}) ->
     {node: {body: bodyOriginal, source, name, returns, style, guard}, node} = path
@@ -455,15 +471,26 @@ transformer = ({types: t}) ->
     TemplateLiteral: (path) ->
       {node: {quote, quasis, expressions}} = path
 
-      if quote.length is 3
-        loneTemplateElement = quasis[0]
-        string = loneTemplateElement.value.raw
-        loneTemplateElement.value.raw = getProcessedHeredoc string
+      processTemplateElements quasis, isHeredoc: quote.length is 3
 
       while (emptyInterpolationIndex = expressions.findIndex ({type}) -> type is 'EmptyInterpolation') isnt -1
         expressions.splice emptyInterpolationIndex, 1
         quasis[emptyInterpolationIndex].value.raw = "#{quasis[emptyInterpolationIndex].value.raw}#{quasis[emptyInterpolationIndex + 1].value.raw}"
         quasis.splice emptyInterpolationIndex + 1, 1
+
+    StringLiteral: (path) ->
+      {node: {value}, node} = path
+
+      # TODO: correspondingly update node.extra.raw?
+      node.value =
+        value
+        .replace STRING_OMIT, '$1'
+        .replace SIMPLE_STRING_OMIT, (match, offset) ->
+          if offset is 0 or offset + match.length is value.length
+            ''
+          else
+            ' '
+
   )
 
 module.exports = transformer
