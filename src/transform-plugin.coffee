@@ -202,6 +202,7 @@ transformer = ({types: t}) ->
   HEREDOC_INDENT = /\n+([^\n\S]*)(?=\S)/g
   LEADING_BLANK_LINE = /^[^\n\S]*\n/
   TRAILING_BLANK_LINE = /\n[^\n\S]*$/
+  NULL_ESCAPE = /// \\0 (?=\d) ///
   TRAILING_NULL_ESCAPE = /// \\0 $ ///
   STRING_OMIT = ///
       ((?:\\\\)+)
@@ -225,6 +226,7 @@ transformer = ({types: t}) ->
           string = string.replace /// \n#{indent} ///g, '\n' if indent
           string = string.replace LEADING_BLANK_LINE, '' if index is 0
           string = string.replace TRAILING_BLANK_LINE, '' if index is strings.length - 1
+        string = string.replace NULL_ESCAPE, '\\x00'
         string = string.replace TRAILING_NULL_ESCAPE, '\\x00'
         string
     (templateElements[index].value.raw = processedString) for processedString, index in processed
