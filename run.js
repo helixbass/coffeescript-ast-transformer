@@ -2,7 +2,8 @@
 
 const fs = require('fs')
 const util = require('util')
-const coffeescript = require('coffeescript')
+// const coffeescript = require('coffeescript')
+const coffeescript = require('../coffeescript_transformed_ast')
 const {default: generate} = require('@babel/generator')
 const {omit, mapValues, flow, map} = require('lodash/fp')
 const {isPlainObject, isArray} = require('lodash')

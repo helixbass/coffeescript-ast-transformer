@@ -204,11 +204,19 @@ transformer = ({types: t}) ->
   TRAILING_BLANK_LINE = /\n[^\n\S]*$/
   NULL_ESCAPE = /// \\0 (?=\d) ///
   TRAILING_NULL_ESCAPE = /// \\0 $ ///
-  STRING_OMIT = ///
+  STRING_ESCAPED_NEWLINE = ///
       ((?:\\\\)+)
     | \\[^\S\n]*\n\s*
   ///g
-  SIMPLE_STRING_OMIT = /\s*\n\s*/g
+  STRING_COLLAPSIBLE_NEWLINE = /\s*\n\s*/g
+
+  collapseStringNewlines = (string, {isInitialChunk = yes, isFinalChunk = yes} = {}) ->
+    string
+    .replace STRING_COLLAPSIBLE_NEWLINE, (match, offset) ->
+      if (isInitialChunk and offset is 0) or (isFinalChunk and offset + match.length is string.length)
+        ''
+      else
+        ' '
 
   processTemplateElements = (templateElements, {isHeredoc = no} = {}) ->
     strings = templateElements.map ({value: {raw}}) -> raw
@@ -221,11 +229,15 @@ transformer = ({types: t}) ->
 
     processed =
       for string, index in strings
-        string = string.replace STRING_OMIT, '$1'
+        string = string.replace STRING_ESCAPED_NEWLINE, '$1'
         if isHeredoc
           string = string.replace /// \n#{indent} ///g, '\n' if indent
           string = string.replace LEADING_BLANK_LINE, '' if index is 0
           string = string.replace TRAILING_BLANK_LINE, '' if index is strings.length - 1
+        else
+          string = collapseStringNewlines string,
+            isInitialChunk: index is 0
+            isFinalChunk: index is strings.length - 1
         string = string.replace NULL_ESCAPE, '\\x00'
         string = string.replace TRAILING_NULL_ESCAPE, '\\x00'
         string
@@ -480,19 +492,8 @@ transformer = ({types: t}) ->
         quasis[emptyInterpolationIndex].value.raw = "#{quasis[emptyInterpolationIndex].value.raw}#{quasis[emptyInterpolationIndex + 1].value.raw}"
         quasis.splice emptyInterpolationIndex + 1, 1
 
-    StringLiteral: (path) ->
-      {node: {value}, node} = path
-
-      # TODO: correspondingly update node.extra.raw?
-      node.value =
-        value
-        .replace STRING_OMIT, '$1'
-        .replace SIMPLE_STRING_OMIT, (match, offset) ->
-          if offset is 0 or offset + match.length is value.length
-            ''
-          else
-            ' '
-
+    # StringLiteral: (path) ->
+    #   # TODO: update node.extra.raw?
   )
 
 module.exports = transformer
