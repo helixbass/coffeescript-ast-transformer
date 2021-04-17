@@ -500,6 +500,15 @@ transformer = ({types: t}) ->
 
     # StringLiteral: (path) ->
     #   # TODO: update node.extra.raw?
+
+    TryStatement: (path, {scope}) ->
+      {node: {handler, finalizer}, node} = path
+
+      unless handler? or finalizer?
+        node.handler = t.catchClause(
+          t.identifier scope.freeVariable 'error', reserve: no
+          t.blockStatement []
+        )
   )
 
 module.exports = transformer
