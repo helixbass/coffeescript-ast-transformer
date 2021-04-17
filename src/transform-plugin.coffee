@@ -368,6 +368,7 @@ transformer = ({types: t}) ->
 
       CONVERSIONS =
         is: '==='
+        isnt: '!=='
         and: '&&'
         or: '||'
 
