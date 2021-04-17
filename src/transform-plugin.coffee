@@ -94,7 +94,7 @@ transformer = ({types: t}) ->
         makeReturn path.get('expression'), {replacePath: path, resultsVariableName}
       when 'ReturnStatement', 'ThrowStatement'
         null
-      when 'For'
+      when 'For', 'WhileStatement'
         node.returns = yes
       when 'SwitchStatement'
         for switchCase, switchCaseIndex in node.cases
@@ -533,14 +533,28 @@ transformer = ({types: t}) ->
           )
         )
 
-    WhileStatement: (path) ->
-      {node: {inverted, test}} = path
+    WhileStatement: (path, {scope}) ->
+      {node: {inverted, test, returns}, node} = path
 
       if inverted
         path.get('test').replaceWith(
           t.unaryExpression '!', test
         )
 
+      if returns
+        returnsVariableName = scope.freeVariable 'results'
+        returnsVariableIdentifier = t.identifier returnsVariableName
+        makeReturn path.get('body'), resultsVariableName: returnsVariableName
+
+        path.replaceWithMultiple [
+          t.expressionStatement t.assignmentExpression(
+            '='
+            returnsVariableIdentifier
+            t.arrayExpression []
+          )
+          node
+          t.returnStatement returnsVariableIdentifier
+        ]
   )
 
 module.exports = transformer
