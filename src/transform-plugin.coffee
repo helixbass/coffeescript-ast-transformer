@@ -101,6 +101,11 @@ transformer = ({types: t}) ->
           makeReturn path.get("cases.#{switchCaseIndex}"), {resultsVariableName}
       when 'SwitchCase'
         makeReturn path.get("consequent.#{node.consequent.length - 1}"), {resultsVariableName}
+      when 'TryStatement'
+        makeReturn path.get('block'), {resultsVariableName}
+        makeReturn path.get('handler'), {resultsVariableName} if node.handler?
+      when 'CatchClause'
+        makeReturn path.get('body'), {resultsVariableName}
       else
         replacePath.replaceWith(
           if resultsVariableName?
@@ -501,14 +506,15 @@ transformer = ({types: t}) ->
     # StringLiteral: (path) ->
     #   # TODO: update node.extra.raw?
 
-    TryStatement: (path, {scope}) ->
-      {node: {handler, finalizer}, node} = path
+    TryStatement:
+      exit: (path, {scope}) ->
+        {node: {handler, finalizer}, node} = path
 
-      unless handler? or finalizer?
-        node.handler = t.catchClause(
-          t.identifier scope.freeVariable 'error', reserve: no
-          t.blockStatement []
-        )
+        unless handler? or finalizer?
+          node.handler = t.catchClause(
+            t.identifier scope.freeVariable 'error', reserve: no
+            t.blockStatement []
+          )
 
     CatchClause: (path, {scope}) ->
       {node: {param}, node} = path
