@@ -96,6 +96,11 @@ transformer = ({types: t}) ->
         null
       when 'For'
         node.returns = yes
+      when 'SwitchStatement'
+        for switchCase, switchCaseIndex in node.cases
+          makeReturn path.get("cases.#{switchCaseIndex}"), {resultsVariableName}
+      when 'SwitchCase'
+        makeReturn path.get("consequent.#{node.consequent.length - 1}"), {resultsVariableName}
       else
         replacePath.replaceWith(
           if resultsVariableName?
