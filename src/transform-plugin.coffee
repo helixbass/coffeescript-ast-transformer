@@ -532,6 +532,15 @@ transformer = ({types: t}) ->
             )
           )
         )
+
+    WhileStatement: (path) ->
+      {node: {inverted, test}} = path
+
+      if inverted
+        path.get('test').replaceWith(
+          t.unaryExpression '!', test
+        )
+
   )
 
 module.exports = transformer
