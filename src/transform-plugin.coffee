@@ -426,7 +426,8 @@ transformer = ({types: t}) ->
         state.scope = scope.parent
 
     'Statement|For': (path, state) ->
-      unless path.node.type in ['Program', 'BlockStatement'] or path.parentPath.node.type in ['Program', 'BlockStatement']
+      validParentTypes = ['Program', 'BlockStatement', 'SwitchCase']
+      unless path.node.type in validParentTypes or path.parentPath.node.type in validParentTypes
         wrapInClosure path
         state.sharedScope = yes
         return
