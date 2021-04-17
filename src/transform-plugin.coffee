@@ -201,6 +201,7 @@ transformer = ({types: t}) ->
   wrapInClosure = (path) ->
     {node} = path
     func = t.functionExpression null, [], blockWrap [node]
+    func._shouldReplaceWithAwaitExpressionIfAsync = yes
     iife = t.callExpression func, []
     path.replaceWith iife
 
@@ -425,16 +426,25 @@ transformer = ({types: t}) ->
 
     'FunctionExpression|ArrowFunctionExpression':
       enter: (path, state) ->
+        {node} = path
         {scope} = state
+        path.skip() if nodesToSkip.has node
         newScope = new Scope scope
         newScope.shared = del state, 'sharedScope'
         state.scope = newScope
+        (state.enclosingFunctionPaths ?= []).push path
 
         makeReturn path.get 'body'
       exit: (path, state) ->
+        {node} = path
         {scope} = state
         addVariableDeclarations(path, scope) if scope.hasDeclaredVariables()
         state.scope = scope.parent
+        state.enclosingFunctionPaths.pop()
+
+        if node._shouldReplaceWithAwaitExpressionIfAsync and node.async
+          nodesToSkip.add node
+          path.replaceWith t.awaitExpression node
 
     'Statement|For': (path, state) ->
       validParentTypes = ['Program', 'BlockStatement', 'SwitchCase']
@@ -556,6 +566,11 @@ transformer = ({types: t}) ->
           node
           t.returnStatement returnsVariableIdentifier
         ]
+
+    AwaitExpression: (path, {enclosingFunctionPaths}) ->
+      enclosingFunctionPath = enclosingFunctionPaths[enclosingFunctionPaths.length - 1]
+      {node: enclosingFunctionNode} = enclosingFunctionPath
+      enclosingFunctionNode.async = yes
   )
 
 module.exports = transformer
