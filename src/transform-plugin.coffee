@@ -509,6 +509,23 @@ transformer = ({types: t}) ->
           t.identifier scope.freeVariable 'error', reserve: no
           t.blockStatement []
         )
+
+    CatchClause: (path, {scope}) ->
+      {node: {param}, node} = path
+
+      useParam = t.identifier scope.freeVariable 'error', reserve: no
+      node.param = useParam
+      if param?
+        path.get('body').unshiftContainer(
+          'body'
+          t.expressionStatement(
+            t.assignmentExpression(
+              '='
+              param
+              useParam
+            )
+          )
+        )
   )
 
 module.exports = transformer
