@@ -92,7 +92,7 @@ transformer = ({types: t}) ->
         makeReturn path.get("body.#{body.length - 1}"), {resultsVariableName}
       when 'ExpressionStatement'
         makeReturn path.get('expression'), {replacePath: path, resultsVariableName}
-      when 'ReturnStatement'
+      when 'ReturnStatement', 'ThrowStatement'
         null
       when 'For'
         node.returns = yes
