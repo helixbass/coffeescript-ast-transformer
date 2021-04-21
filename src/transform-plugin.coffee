@@ -16,7 +16,7 @@ withNullReturnValues = mapValues (f) ->
       null
 
 class Scope
-  constructor: (@parent) ->
+  constructor: (@parent, @expressions, @method) ->
     @declaredVariables = []
     @positions = {}
     @utilities = {} unless @parent
@@ -64,6 +64,10 @@ class Scope
   assign: (name, value) ->
     @addDeclaredVariable name, {value, assigned: yes}
     @hasAssignments = yes
+
+  namedMethod: ->
+    return @method if @method?.key or not @parent
+    @parent.namedMethod()
 
 transformer = ({types: t}) ->
   addVariableDeclarations = (path, scope) ->
@@ -355,7 +359,7 @@ transformer = ({types: t}) ->
         forStatement
       ]
   
-  visitClass = (path) ->
+  visitClassExit = (path) ->
     {node: {id}, node} = path
 
     if nodesToSkip.has node
@@ -443,14 +447,14 @@ transformer = ({types: t}) ->
             ) ? []
           )
 
-    'FunctionExpression|ArrowFunctionExpression':
+    'FunctionExpression|ArrowFunctionExpression|ClassMethod':
       enter: (path, state) ->
-        {node} = path
+        {node: {body}, node} = path
         {scope} = state
         if nodesToSkip.has node
           path.skip()
           return
-        newScope = new Scope scope
+        newScope = new Scope scope, body, node
         newScope.shared = del state, 'sharedScope'
         state.scope = newScope
         (state.enclosingFunctionPaths ?= []).push path
@@ -598,11 +602,28 @@ transformer = ({types: t}) ->
       {node: enclosingFunctionNode} = enclosingFunctionPath
       enclosingFunctionNode.async = yes
 
-    ClassDeclaration: (path, state) ->
-      visitClass(path, state)
+    ClassDeclaration:
+      exit: (path, state) ->
+        visitClassExit(path, state)
 
-    ClassExpression: (path, state) ->
-      visitClass(path, state)
+    ClassExpression:
+      exit: (path, state) ->
+        visitClassExit(path, state)
+
+    Super: (path, {scope}) ->
+      {node} = path
+      if nodesToSkip.has node
+        path.skip()
+        return
+
+      enclosingMethod = scope.namedMethod()
+      path.replaceWith(
+        t.memberExpression(
+          node,
+          enclosingMethod.key
+        )
+      )
+      nodesToSkip.add node
   )
 
 module.exports = transformer
