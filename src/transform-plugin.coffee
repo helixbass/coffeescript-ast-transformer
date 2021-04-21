@@ -427,7 +427,11 @@ transformer = ({types: t}) ->
             if t.isIdentifier(argument) and not scope.check argument.name
               template.expression.ast "typeof #{argument.name} !== 'undefined' && #{argument.name} !== null"
             else
-              template.expression.ast "#{argument.name} != null"
+              t.binaryExpression(
+                '!='
+                argument
+                t.nullLiteral()
+              )
           )
         when 'do'
           func =
@@ -598,9 +602,14 @@ transformer = ({types: t}) ->
         ]
 
     AwaitExpression: (path, {enclosingFunctionPaths}) ->
+      {node: {argument}} = path
+
       enclosingFunctionPath = enclosingFunctionPaths[enclosingFunctionPaths.length - 1]
       {node: enclosingFunctionNode} = enclosingFunctionPath
       enclosingFunctionNode.async = yes
+
+      if argument.type is 'ReturnStatement'
+        path.parentPath.replaceWith argument
 
     ClassDeclaration:
       exit: (path, state) ->
