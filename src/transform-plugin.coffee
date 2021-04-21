@@ -355,6 +355,25 @@ transformer = ({types: t}) ->
         forStatement
       ]
   
+  visitClass = (path) ->
+    {node: {id}, node} = path
+
+    if nodesToSkip.has node
+      path.skip()
+      return
+
+    if id?
+      node.type = 'ClassExpression'
+      classAssignment = t.assignmentExpression(
+        '='
+        id
+        node
+      )
+      path.replaceWith(
+        classAssignment
+      )
+      nodesToSkip.add node
+
   visitor: withNullReturnValues(
     Program:
       enter: (_, state) ->
@@ -428,7 +447,9 @@ transformer = ({types: t}) ->
       enter: (path, state) ->
         {node} = path
         {scope} = state
-        path.skip() if nodesToSkip.has node
+        if nodesToSkip.has node
+          path.skip()
+          return
         newScope = new Scope scope
         newScope.shared = del state, 'sharedScope'
         state.scope = newScope
@@ -457,10 +478,15 @@ transformer = ({types: t}) ->
 
     ExpressionStatement: (path) ->
       {node} = path
-      path.skip() if nodesToSkip.has node
+      if nodesToSkip.has node
+        path.skip()
+        
 
     AssignmentExpression: (path, {scope}) ->
-      {node: {left}} = path
+      {node: {left}, node} = path
+      if nodesToSkip.has node
+        path.skip()
+        return
 
       if left.type is 'ArrayPattern' and not getIsAssignable(left)
         handleDestructuringAssignment path, scope
@@ -571,6 +597,12 @@ transformer = ({types: t}) ->
       enclosingFunctionPath = enclosingFunctionPaths[enclosingFunctionPaths.length - 1]
       {node: enclosingFunctionNode} = enclosingFunctionPath
       enclosingFunctionNode.async = yes
+
+    ClassDeclaration: (path, state) ->
+      visitClass(path, state)
+
+    ClassExpression: (path, state) ->
+      visitClass(path, state)
   )
 
 module.exports = transformer
