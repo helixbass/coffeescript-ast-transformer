@@ -205,7 +205,7 @@ transformer = ({types: t}) ->
   wrapInClosure = (path) ->
     {node} = path
     func = t.functionExpression null, [], blockWrap [node]
-    func._shouldReplaceWithAwaitExpressionIfAsync = yes
+    func._shouldReplaceParentCallExpressionWithAwaitExpressionIfAsync = yes
     iife = t.callExpression func, []
     path.replaceWith iife
 
@@ -465,15 +465,15 @@ transformer = ({types: t}) ->
 
         makeReturn path.get 'body'
       exit: (path, state) ->
-        {node} = path
+        {node, parentPath} = path
         {scope} = state
         addVariableDeclarations(path, scope) if scope.hasDeclaredVariables()
         state.scope = scope.parent
         state.enclosingFunctionPaths.pop()
 
-        if node._shouldReplaceWithAwaitExpressionIfAsync and node.async
-          nodesToSkip.add node
-          path.replaceWith t.awaitExpression node
+        if node._shouldReplaceParentCallExpressionWithAwaitExpressionIfAsync and node.async
+          nodesToSkip.add parentPath.node
+          parentPath.replaceWith t.awaitExpression parentPath.node
 
     'Statement|For': (path, state) ->
       validParentTypes = ['Program', 'BlockStatement', 'SwitchCase']
@@ -656,6 +656,12 @@ transformer = ({types: t}) ->
               void0
             )
           )
+
+    CallExpression: (path) ->
+      {node} = path
+      if nodesToSkip.has node
+        path.skip()
+        
   )
 
 module.exports = transformer
