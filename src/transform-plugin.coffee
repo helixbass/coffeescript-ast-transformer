@@ -633,6 +633,29 @@ transformer = ({types: t}) ->
         )
       )
       nodesToSkip.add node
+
+    OptionalMemberExpression: (path) ->
+      {node: {optional, object, property, computed}, parentPath} = path
+
+      if optional
+        existence = t.unaryExpression('?', object, false)
+        nonOptionalMemberExpression = t.memberExpression(object, property, computed)
+        void0 = template.expression.ast 'void 0'
+        if t.isExpressionStatement parentPath.node
+          parentPath.replaceWith(
+            t.ifStatement(
+              existence
+              blockWrap [t.expressionStatement(nonOptionalMemberExpression)]
+            )
+          )
+        else
+          path.replaceWith(
+            t.conditionalExpression(
+              existence
+              nonOptionalMemberExpression
+              void0
+            )
+          )
   )
 
 module.exports = transformer
