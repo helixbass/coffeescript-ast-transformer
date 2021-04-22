@@ -378,6 +378,45 @@ transformer = ({types: t}) ->
       )
       nodesToSkip.add node
 
+  visitMemberExpression = (path) ->
+    {node: {object, property}} = path
+
+    if property.type is 'Range'
+      {from, to, exclusive} = property
+      sliceArguments = [
+        from ? t.numericLiteral(0)
+      ]
+      sliceArguments.push(
+        if exclusive
+          to
+        else if t.isNumericLiteral(to)
+          t.numericLiteral(to.value + 1)
+        else
+          # TODO: use parameterized template (+{to} + 1 || 9e9)?
+          t.logicalExpression(
+            '||'
+            t.binaryExpression(
+              '+'
+              t.unaryExpression(
+                '+'
+                to
+                yes
+              )
+              t.numericLiteral(1)
+            )
+            t.numericLiteral(9e9) # TODO: emit "9e9" (rather than "9000000000") by overriding `extra.raw`?
+          )
+      ) if to?
+      path.replaceWith(
+        t.callExpression(
+          t.memberExpression(
+            object
+            t.identifier 'slice'
+          )
+          sliceArguments
+        )
+      )
+
   visitor: withNullReturnValues(
     Program:
       enter: (_, state) ->
@@ -656,6 +695,12 @@ transformer = ({types: t}) ->
               void0
             )
           )
+        return
+
+      visitMemberExpression(path)
+
+    MemberExpression: (path) ->
+      visitMemberExpression(path)
 
     CallExpression: (path) ->
       {node} = path
