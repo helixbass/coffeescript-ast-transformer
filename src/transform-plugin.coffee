@@ -203,7 +203,9 @@ transformer = ({types: t}) ->
       expressionStatement
 
   handleSpliceAssignment = (path, scope) ->
-    {node: {left: {object, property: range}, right}} = path
+    {node: {left: {object, property: {from, to, exclusive}}, right}} = path
+
+    fromUse = from ? t.numericLiteral 0
 
     path.replaceWith(
       t.sequenceExpression [
@@ -217,8 +219,26 @@ transformer = ({types: t}) ->
             t.callExpression(
               t.memberExpression(
                 t.arrayExpression [
-                  range.from
-                  range.to
+                  fromUse
+                  if t.isNumericLiteral(from) and t.isNumericLiteral(to)
+                    t.numericLiteral (to.value - from.value) + (if exclusive then 0 else 1)
+                  else if to?
+                    toMinusFrom =
+                      t.binaryExpression(
+                        '-'
+                        to
+                        fromUse
+                      )
+                    if exclusive
+                      toMinusFrom
+                    else
+                      t.binaryExpression(
+                        '+'
+                        toMinusFrom
+                        t.numericLiteral 1
+                      )
+                  else
+                    t.numericLiteral 9e9
                 ]
                 t.identifier 'concat'
               )
