@@ -202,6 +202,34 @@ transformer = ({types: t}) ->
       nodesToSkip.add expressionStatement
       expressionStatement
 
+  handleSpliceAssignment = (path, scope) ->
+    {node: {left: {object, property: range}, right}} = path
+
+    path.replaceWith(
+      t.sequenceExpression [
+        t.callExpression(
+          t.memberExpression(
+            t.identifier utility 'splice', scope
+            t.identifier 'apply'
+          )
+          [
+            object
+            t.callExpression(
+              t.memberExpression(
+                t.arrayExpression [
+                  range.from
+                  range.to
+                ]
+                t.identifier 'concat'
+              )
+              [right]
+            )
+          ]
+        )
+        right
+      ]
+    )
+
   wrapInClosure = (path) ->
     {node} = path
     func = t.functionExpression null, [], blockWrap [node]
@@ -320,7 +348,10 @@ transformer = ({types: t}) ->
               ]
             )
           test = t.binaryExpression(
-            '<='
+            if source.exclusive
+              '<'
+            else
+              '<='
             indexVariableIdentifier
             source.to
           )
@@ -554,8 +585,10 @@ transformer = ({types: t}) ->
         path.skip()
         return
 
-      if left.type is 'ArrayPattern' and not getIsAssignable(left)
+      if t.isArrayPattern(left) and not getIsAssignable(left)
         handleDestructuringAssignment path, scope
+      else if t.isMemberExpression(left) and left.property.type is 'Range'
+        handleSpliceAssignment path, scope
 
     InterpolatedRegExpLiteral: (path) ->
       {node: {interpolatedPattern}} = path
