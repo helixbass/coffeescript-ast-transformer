@@ -307,33 +307,52 @@ transformer = ({types: t}) ->
       else
         indexVariableName = scope.freeVariable 'i', single: yes
         indexVariableIdentifier = t.identifier indexVariableName
-        indexInitialization = t.assignmentExpression(
-          '='
-          indexVariableIdentifier
-          t.numericLiteral 0
-        )
-        lengthVariableName = scope.freeVariable 'len'
-        lengthVariableIdentifier = t.identifier lengthVariableName
-        lengthInitialization = t.assignmentExpression(
-          '='
-          lengthVariableIdentifier
-          t.memberExpression sourceReference, t.identifier 'length'
-        )
-        init = t.sequenceExpression [
-          indexInitialization
-          lengthInitialization
-        ]
-        test = t.binaryExpression '<', indexVariableIdentifier, lengthVariableIdentifier
+        if source.type is 'Range'
+          init =
+            # if name?
+            t.variableDeclaration(
+              'var'
+              [
+                t.variableDeclarator(
+                  indexVariableIdentifier
+                  source.from
+                )
+              ]
+            )
+          test = t.binaryExpression(
+            '<='
+            indexVariableIdentifier
+            source.to
+          )
+        else
+          indexInitialization = t.assignmentExpression(
+            '='
+            indexVariableIdentifier
+            t.numericLiteral 0
+          )
+          lengthVariableName = scope.freeVariable 'len'
+          lengthVariableIdentifier = t.identifier lengthVariableName
+          lengthInitialization = t.assignmentExpression(
+            '='
+            lengthVariableIdentifier
+            t.memberExpression sourceReference, t.identifier 'length'
+          )
+          init = t.sequenceExpression [
+            indexInitialization
+            lengthInitialization
+          ]
+          test = t.binaryExpression '<', indexVariableIdentifier, lengthVariableIdentifier
         update = t.updateExpression '++', indexVariableIdentifier, no
-        body.body.unshift(
-          t.expressionStatement(
-            t.assignmentExpression(
-              '='
-              name
-              t.memberExpression sourceReference, indexVariableIdentifier, yes
+        if name?
+          body.body.unshift(
+            t.expressionStatement(
+              t.assignmentExpression(
+                '='
+                name
+                t.memberExpression sourceReference, indexVariableIdentifier, yes
+              )
             )
           )
-        )
 
         t.forStatement(
           init
